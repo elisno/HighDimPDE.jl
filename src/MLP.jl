@@ -1,4 +1,4 @@
-const verbose = true
+const verbose = false
 """
 Multi level Picard algorithm for solving non local non linear PDES.
     
@@ -21,9 +21,6 @@ MLP(;M=10,L=2,K=1) = MLP(M,L,K)
 function DiffEqBase.__solve(
     prob::PIDEProblem,
     alg::MLP;
-    # mc_sample;
-    dt,
-    verbose=false,
     multithreading=false
     )
     
@@ -48,7 +45,7 @@ function DiffEqBase.__solve(
     end
 
     if multithreading
-        return _ml_picard_mlt(M, L, K, x,prob.tspan[1],prob.tspan[2], sde_loop!, g, f)
+        return _ml_picard_mlt(M, L, K, x, prob.tspan[1], prob.tspan[2], sde_loop!, g, f)
     else
         return _ml_picard(M, L, K, x, prob.tspan[1], prob.tspan[2], sde_loop!, g, f)
     end
@@ -111,7 +108,7 @@ function _ml_picard(
                 x32 = x3
                 x34 = x3
                 b3 += f(x2, x32, b2, _ml_picard(M, l, K, x32, r, t, sde_loop!, g, f),0.,0.,t) 
-                    - f(x2, x34, b4, _ml_picard(M, l - 1, K, x34, r, t), sde_loop!, g, f,0.,0.,t) #TODO:hardcode, not sure about t
+                    - f(x2, x34, b4, _ml_picard(M, l - 1, K, x34, r, t, sde_loop!, g, f),0.,0.,t) #TODO:hardcode, not sure about t
             end
             b += b3 / K
         end
@@ -141,11 +138,11 @@ function _ml_picard_mlt(
                         g, 
                         f
                         )
-    a = Threads.Atomic{Float64}(0.) 
-    a2 = Threads.Atomic{Float64}(0.) 
-    b = Threads.Atomic{Float64}(0.) 
+    a = 0.
+    a2 =0.
     for l in 0:(min(L, 2) - 1)
         verbose && println("loop l")
+        b = Threads.Atomic{Float64}(0.) 
         num = M^(L - l) # ? why 0.5 in sebastian code?
         @Threads.threads for k in 0:num
             verbose && println("loop k")
@@ -158,33 +155,34 @@ function _ml_picard_mlt(
             for h in 0:(K-1)
                 verbose && println("loop h")
                 x3 = randn(size(x))
-                b3 += f(x2, x3, b2, _ml_picard(M, l, K, x3, r, t, sde_loop!, g, f),0.,0.,t) #TODO:hardcode, not sure about t
+                b3 += f(x2, x3, b2, _ml_picard(M, l, K, x3, r, t, sde_loop!, g, f), 0., 0.,t) #TODO:hardcode, not sure about t
             end
             Threads.atomic_add!(b, b3 / K)
         end
-         Threads.atomic_add!(a, (t - s) * (b / num))
+        a += (t - s) * (b[] / num)
     end
 
     for l in 2:(L-1)
-        b = 0.
+        b = Threads.Atomic{Float64}(0.) 
         num = M^(L - l)
         @Threads.threads for k in 1:num
             r = s + (t - s) * rand()
             x2 = similar(x)
             sde_loop!(x, x2, s, r)
             b2 = _ml_picard(M, l, K, x2, r, t, sde_loop!, g, f)
-            b4 = _ml_picard(M, l - 1, x2, r, t, sde_loop!, g, f)
+            b4 = _ml_picard(M, l - 1, K, x2, r, t, sde_loop!, g, f)
             b3 = 0.
             # non local integration
             for h in 0:(K-1)
                 x3 = randn(size(x))
                 x32 = x3
                 x34 = x3
-                b3 += f(x2, x32, b2, _ml_picard(M, l, K, x32, r, t, sde_loop!, g, f), 0.,0.,t) - f(x2, x34, b4, _ml_picard(M, l - 1, K, x34, r, t, sde_loop!, g, f),0.,0.,t) #TODO:hardcode, not sure about t
+                b3 += f(x2, x32, b2, _ml_picard(M, l, K, x32, r, t, sde_loop!, g, f), 0.,0.,t) 
+                    - f(x2, x34, b4, _ml_picard(M, l - 1, K, x34, r, t, sde_loop!, g, f), 0., 0.,t) #TODO:hardcode, not sure about t
             end
             Threads.atomic_add!(b, b3 / K)
         end
-        Threads.atomic_add!(a, (t - s) * (b / num))
+        a += (t - s) * (b[] / num)
     end
 
     num = M^(L)

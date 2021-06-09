@@ -29,13 +29,13 @@ prob = PIDEProblem(g, f, μ, σ, X0, tspan,
                      )
 
 # using the Deep Splitting algorithm
-alg = MLP(M=4, K=5, L = 3 )
+alg = MLP(M= 5, K= 10, L = 4 )
 
 
 # solving
 sol = solve(prob, alg,
-            dt=dt,
-            verbose = false)
+            multithreading = true
+            )
 println("u1 = ", sol)
 
 # sol
