@@ -74,8 +74,8 @@ end
 ### For publication ####
 ########################
 if true
-        df = DataFrame(); [df[c] = Float64[] for c in [L"d",L"T",L"N","Mean","Std. dev."]]
-        dfu = DataFrame(); [dfu[c] = Float64[] for c in ["d","T","N","u"]]
+        df = DataFrame(); [df[!,c] = Float64[] for c in [L"d",L"T",L"N","Mean","Std. dev."]]
+        dfu = DataFrame(); [dfu[!,c] = Float64[] for c in ["d","T","N","u"]]
         for d in [1,2,5,10],T in [1/5,1/2,1]
                 N = 10
                 u = []

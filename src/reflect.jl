@@ -77,16 +77,24 @@ function _reflect_GPU2(a, #first point
     n = zeros(size(a)) |> _device
     # Allocating
     while sum(out1 .+ out2) > 0
-        rtemp1 = @. (a - s) / (a - b) #left
-        rtemp2 = @. (e - a) / (b - a) #right
-        rtemp = rtemp1 .* out1 .+ rtemp2 .* out2 .+ (.!(out1 .| out2))
+        rtemp1 = @. (a - s)  #left
+        rtemp2 = @. (e - a)  #right
+        rtemp = - rtemp1 .* out1 .+ rtemp2 .* out2 .+ (b .-a ) .* (.!(out1 .| out2))
         rmin = minimum(rtemp,dims=1)
-        n .= rtemp .== minimum(rtemp;dims=1)
-        c = @. (a + (b-a) * rmin)
+        n .= rtemp .== rmin
+        # imin = argmin(rtemp,dims=1)
+        # n = CuSparseMatrixCSC(imin,CUDA.ones(length(imin)),size(a) )
+        c = @. (a + rmin)
         b = @. ( b - 2 * n * (b-c) )
         a = c
         @. out1 = b < s
         @. out2 = b .> e
     end
     return b
+end
+
+import CUDA.CUSPARSE.CuSparseMatrixCSC
+function CuSparseMatrixCSC(idx::CuArray{T,N}, v, dim) where {T <: CartesianIndex,N}
+    idx = reinterpret(Int, reshape(idx, 1, :))
+    return CuSparseMatrixCSC(idx[1,:], idx[2,:], v, dim)
 end
